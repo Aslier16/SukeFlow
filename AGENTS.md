@@ -136,7 +136,7 @@ dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish
 - 同一课程（同 `JxbId`）可能出现在多个星期/多个节次 → 视为同一门课的多个时段。
 - 课程颜色不来自 HTML：按课程名（或 JxbId）**哈希到固定调色板**，保证同一课程到处同色（参考图行为）。
 - **「其它课程」不解析**（无固定时间的课程，格式如 `形势与政策（五）★王贺(共4周)/1-4周/无;`）。
-- 解析器输入为 HTML 字符串，内置 `Assets/个人课表查询.html` 作为测试/示例数据。
+- 解析器输入为 HTML 字符串；`Assets/个人课表查询.html` 仅作为**测试夹具**（`SampleTimetable`）保留，应用内不再预置示例课程。
 
 ## 7. CourseTable 参考 UI 规格（来自 `Assets/CourseTableRef.png`）
 
@@ -205,10 +205,10 @@ dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish
 - [x] ViewModel/View 接线（已用截图 + 像素/OCR 验证：布局、卡片颜色、当周优先、淡化徽章、详情弹层）
 - [x] Android / WASM 目标接入（Android 产物 APK；WASM 已发布并在无头 Chrome 中渲染验证）
 - [x] 中文显示：内嵌 Noto Sans SC（WASM 修复）
-- [x] 持久化 + HTML 导入（顶栏「导入」面板；桌面/Android 文件、WASM localStorage）
+- [x] 导入入口：选择 HTML 文件（`StorageProvider`）+ 粘贴源码；输入框上下文菜单含「清空」；初始无课表（无示例课程）
 - [x] 翻页与弹层动画（三页跟手滑动 + 提交/回弹缓动；底部弹层滑入/滑出）
 - [x] 本地存储各端打通（WASM localStorage 写入/读取已端到端验证）
-- [x] 单元测试：`SukeFlow.Tests`（50 个用例，覆盖解析器/周次/模型/序列化）
+- [x] 单元测试：`SukeFlow.Tests`（64 个用例，覆盖解析器/周次/模型/序列化/解码/导入流程）
 - [x] 发布链路：GitHub Actions（CI 门禁、WASM → Pages、tag → Windows zip + 签名 APK + Release）
 - [ ] 发布配置细化（应用图标、WASM 字体子集化/压缩、APK AOT 与裁剪选项、Windows 代码签名）
 
@@ -216,9 +216,15 @@ dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish
 
 ### 9.1 导入流程（UI）
 
-1. 顶栏「导入」按钮 → 底部弹出导入面板：粘贴教务系统「个人课表查询」页面 HTML（另存网页后全选复制即可）。
-2. 点「解析并保存」→ `ZfsoftTimetableParser` 解析 → 替换当前课表 → 写入本地存储 → 状态栏提示「解析成功：N 门课程 / M 个时段」。
-3. 「载入示例」加载内置示例课表并保存；「清除数据」删除本地数据并恢复示例课表。
+1. 顶栏「导入」按钮 → 底部弹出导入面板，两种入口：
+   - **选择文件（手机端推荐）**：`TopLevel.StorageProvider.OpenFilePickerAsync`（桌面→文件对话框、Android→SAF、WASM→`<input type=file>`）→ 读字节 → `HtmlTextDecoder.Decode`（UTF-8/BOM → GB18030 → 宽松 UTF-8）→ `MainViewModel.ImportFromTextAsync`。
+     > 之所以要文件入口：Android 输入控件对超长文本有限制，整页 HTML（~110 KB）粘不进去。
+   - **粘贴源码**：文本框粘贴后点「解析并保存」（`ImportFromHtmlCommand` → 同一个 `ImportFromTextAsync`）。
+     输入框自带上下文菜单：剪切/复制/粘贴/全选/**清空**（`ClearImportHtmlCommand`），面板上另有一个「清空」小按钮方便触屏。
+2. 解析成功 → 替换当前课表 → 写入本地存储 → 状态提示「解析成功：N 门课程 / M 个时段」→ 面板自动关闭。
+3. 「清除已保存数据」删除本地数据并把课表置空（**不预置任何示例课程**）。
+
+> 首次启动为空课表，课表区域显示「暂无课程数据，点右上角「导入」添加」。
 
 ### 9.2 存储实现（各端）
 
@@ -228,7 +234,7 @@ dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish
 | Android | `FileTimetableStorage`（Android Head 注入 `FilesDir`） | `/data/data/com.sukeflow.app/files/timetable.json` | 应用私有目录，卸载即清除 |
 | WASM | `LocalStorageTimetableStorage`（JSImport → `localStorage`） | `localStorage['sukeflow.timetable.json']` | 浏览器无法写“应用目录”，故用 localStorage；写入/读取已用无头 Chrome + CDP 实测 |
 
-- 入口：`AppStorage.Timetable`（平台 Head 在启动时替换实现，见 `SukeFlow.Desktop/Program.cs`、`SukeFlow.Android/Application.cs`、`SukeFlow.Browser/Program.cs`）；首次启动无本地数据时显示内置示例课表。
+- 入口：`AppStorage.Timetable`（平台 Head 在启动时替换实现，见 `SukeFlow.Desktop/Program.cs`、`SukeFlow.Android/Application.cs`、`SukeFlow.Browser/Program.cs`）；首次启动无本地数据时保持**空课表**（不预置示例数据）。
 - 数据优先放应用目录，保持用户目录清洁；若应用目录不存在旧数据、而降级路径（旧版本用户目录）有数据，会在首次读取时**自动迁移并清理旧文件/空目录**。
 - 格式：`TimetableSerializer` + `TimetableJsonContext`（源生成，兼容 AOT）：camelCase、缩进、中文不转义；示例课表 JSON 约 6–10 KB。
 
@@ -251,7 +257,7 @@ Android 用 `FilesDir` 显式指定应用私有目录，不依赖 `SpecialFolder
 
 **可靠性处理**：
 
-- 读取失败/JSON 损坏 → 返回 `null`，回退到内置示例课表，并在导入面板提示（`InitializeAsync` 捕获）。
+- 读取失败/JSON 损坏 → 返回 `null`，保持空课表并在导入面板提示（`InitializeAsync` 捕获）。
 - 写入失败（隐私模式、配额满）→ 不静默：抛出可读异常，界面提示「保存失败：…」；「清除数据」失败也会提示。
 - 格式演进：当前未加版本号；若后续变更字段语义，建议在外层加 `version` 包装并做迁移。
 - 模型上仅标注 `[JsonIgnore]`（计算属性）与可写集合属性，便于直接序列化。
@@ -311,7 +317,7 @@ Android 用 `FilesDir` 显式指定应用私有目录，不依赖 `SpecialFolder
 
 ### 12.4 仓库红线（务必遵守）
 
-- `SukeFlow.Core/Assets/个人课表查询.html` 是**唯一入库的示例数据**，必须保持脱敏（虚构姓名/学号/教师/教学班编号）。
+- `SukeFlow.Core/Assets/个人课表查询.html` 是**唯一入库的示例数据**（仅用于解析器测试夹具，不再进应用 UI），必须保持脱敏（虚构姓名/学号/教师/教学班编号）。
   原文含真实学号与教师工号，备份在仓库外 `~/.sukeflow/个人课表查询.original.html`，禁止提交。
 - `SukeFlow.Core/Assets/CourseTableRef.png` 是含真实教师/教室信息的第三方截图，已加入 `.gitignore`，仅作本地 UI 参考（规格已记录在 §7）。
 - 任何 `*.keystore` / `*.jks` / `*.b64` / `.idea/` / `*.DotSettings.user` 都不入库。

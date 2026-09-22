@@ -14,14 +14,16 @@ public partial class MainViewModel : ViewModelBase
 {
     public MainViewModel()
     {
-        Timetable = SampleTimetable.Parse();
+        // 初始为空课表（不预置示例数据），启动后由 InitializeAsync 从本地存储载入
+        Timetable = new Timetable();
+        DataSourceText = "未导入课表";
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         CurrentWeek = Math.Clamp(Semester.GetWeek(today), 1, Semester.WeekCount);
         DisplayWeek = CurrentWeek;
     }
 
-    /// <summary>课程表数据（导入 / 载入示例会替换）。</summary>
+    /// <summary>课程表数据（导入会替换）。</summary>
     [ObservableProperty]
     public partial Timetable Timetable { get; set; }
 
@@ -74,7 +76,7 @@ public partial class MainViewModel : ViewModelBase
 
     /// <summary>当前数据来源说明。</summary>
     [ObservableProperty]
-    public partial string DataSourceText { get; set; } = "示例数据";
+    public partial string DataSourceText { get; set; } = "未导入课表";
 
     /// <summary>详情卡片中的课程。</summary>
     [ObservableProperty]
@@ -179,7 +181,7 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>启动时载入本地已保存的课表（没有则保留示例数据）。</summary>
+    /// <summary>启动时载入本地已保存的课表；没有则保持空表并提示导入。</summary>
     public async Task InitializeAsync()
     {
         try
@@ -192,7 +194,11 @@ public partial class MainViewModel : ViewModelBase
                 Timetable = saved;
                 DataSourceText = "本地已保存的课表";
                 ImportStatus = $"已载入本地课表：{saved.Courses.Count} 门课程";
+                return;
             }
+
+            Timetable = new Timetable();
+            DataSourceText = "未导入课表";
         }
         catch (Exception ex)
         {
@@ -237,22 +243,47 @@ public partial class MainViewModel : ViewModelBase
     [RelayCommand]
     private void CloseImport() => IsImportOpen = false;
 
-    /// <summary>解析粘贴的正方教务 HTML 并保存。</summary>
+    /// <summary>解析粘贴/读取的正方教务 HTML 并保存。</summary>
     [RelayCommand]
     private async Task ImportFromHtmlAsync()
     {
         if (string.IsNullOrWhiteSpace(ImportHtml))
         {
-            ImportStatus = "请先粘贴「个人课表查询」页面的 HTML 源码";
+            ImportStatus = "请先粘贴「个人课表查询」页面的 HTML 源码，或点「选择文件」";
+            return;
+        }
+
+        await ImportFromTextAsync(ImportHtml, "粘贴的内容").ConfigureAwait(true);
+    }
+
+    /// <summary>清空输入框（供上下文菜单「清空」使用）。</summary>
+    [RelayCommand]
+    private void ClearImportHtml()
+    {
+        ImportHtml = string.Empty;
+        ImportStatus = string.Empty;
+    }
+
+    /// <summary>设置导入面板状态文本（供文件读取失败等场景使用）。</summary>
+    public void SetImportStatus(string text) => ImportStatus = text;
+
+    /// <summary>
+    /// 解析课表 HTML 文本并保存。文本可来自输入框粘贴或文件选择（<paramref name="sourceLabel"/> 仅用于提示）。
+    /// </summary>
+    public async Task ImportFromTextAsync(string html, string sourceLabel = "选择的文件")
+    {
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            ImportStatus = $"{sourceLabel}内容为空";
             return;
         }
 
         try
         {
-            var parsed = new ZfsoftTimetableParser().Parse(ImportHtml);
+            var parsed = new ZfsoftTimetableParser().Parse(html);
             if (parsed.IsEmpty)
             {
-                ImportStatus = "未解析到课程，请确认粘贴的是教务系统「个人课表查询」页面源码";
+                ImportStatus = $"未从{sourceLabel}解析到课程，请确认内容是教务系统「个人课表查询」页面源码";
                 return;
             }
 
@@ -264,6 +295,7 @@ public partial class MainViewModel : ViewModelBase
             await AppStorage.Timetable.SaveAsync(TimetableSerializer.Serialize(parsed)).ConfigureAwait(true);
 
             var sessions = parsed.Courses.Sum(c => c.Sessions.Count);
+            ImportHtml = string.Empty;
             ImportStatus = $"解析成功：{parsed.Courses.Count} 门课程 / {sessions} 个时段，已保存到本地";
             IsImportOpen = false;
         }
@@ -273,41 +305,19 @@ public partial class MainViewModel : ViewModelBase
         }
     }
 
-    /// <summary>载入内置示例课表并保存。</summary>
-    [RelayCommand]
-    private async Task LoadSampleAsync()
-    {
-        var sample = SampleTimetable.Parse();
-        Timetable = sample;
-        SelectedCourse = null;
-        IsDetailOpen = false;
-        DataSourceText = "示例数据";
-
-        try
-        {
-            await AppStorage.Timetable.SaveAsync(TimetableSerializer.Serialize(sample)).ConfigureAwait(true);
-            ImportStatus = $"已载入示例课表（{sample.Courses.Count} 门课程）并保存到本地";
-            IsImportOpen = false;
-        }
-        catch (Exception ex)
-        {
-            ImportStatus = $"示例课表已载入，但保存失败：{ex.Message}";
-        }
-    }
-
-    /// <summary>清除本地保存的数据并恢复示例课表。</summary>
+    /// <summary>清除本地保存的数据，课表置空。</summary>
     [RelayCommand]
     private async Task ClearSavedAsync()
     {
-        Timetable = SampleTimetable.Parse();
+        Timetable = new Timetable();
         SelectedCourse = null;
         IsDetailOpen = false;
-        DataSourceText = "示例数据";
+        DataSourceText = "未导入课表";
 
         try
         {
             await AppStorage.Timetable.ClearAsync().ConfigureAwait(true);
-            ImportStatus = "已清除本地数据，恢复为示例课表";
+            ImportStatus = "已清除本地数据，课表已清空";
         }
         catch (Exception ex)
         {

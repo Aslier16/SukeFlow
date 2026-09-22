@@ -135,20 +135,40 @@
                     </Grid>
 
                     <TextBlock FontSize="12" Foreground="#6B7186" TextWrapping="Wrap" LineHeight="18"
-                               Text="把教务系统「个人课表查询」网页另存为 HTML 后，用文本编辑器打开并全选复制，粘贴到下方；也可以直接粘贴网页源码。其它课程会被忽略。" />
+                               Text="两种方式：① 点「选择文件」直接选教务系统「个人课表查询」另存的 HTML 文件（手机端推荐）；② 复制网页源码粘贴到下方输入框。其它课程会被忽略。" />
 
-                    <TextBox Text="{Binding ImportHtml}" AcceptsReturn="True" Height="200"
+                    <Button Content="📄 选择 HTML 文件" Click="OnPickHtmlFileClick" Height="34"
+                            HorizontalAlignment="Stretch" FontSize="13" CornerRadius="8"
+                            Background="#E8EDFD" Foreground="#3355C9" />
+
+                    <Grid ColumnDefinitions="*,Auto">
+                        <TextBlock Grid.Column="0" Text="或粘贴 HTML 源码" FontSize="12" Foreground="#8A90A6"
+                                   VerticalAlignment="Center" />
+                        <Button Grid.Column="1" Content="清空" Command="{Binding ClearImportHtmlCommand}" Height="26"
+                                Padding="10,0" FontSize="12" CornerRadius="7"
+                                Background="#F0F1F8" Foreground="#6B7186" />
+                    </Grid>
+
+                    <TextBox x:Name="ImportHtmlBox" Text="{Binding ImportHtml}" AcceptsReturn="True" Height="180"
                              TextWrapping="Wrap" FontSize="12" CornerRadius="10"
-                             Watermark="在此粘贴 HTML 源码…" />
+                             PlaceholderText="在此粘贴 HTML 源码…">
+                        <TextBox.ContextMenu>
+                            <ContextMenu>
+                                <MenuItem Header="剪切" Click="OnCutClick" IsEnabled="{Binding $parent[TextBox].CanCut}" />
+                                <MenuItem Header="复制" Click="OnCopyClick" IsEnabled="{Binding $parent[TextBox].CanCopy}" />
+                                <MenuItem Header="粘贴" Click="OnPasteClick" IsEnabled="{Binding $parent[TextBox].CanPaste}" />
+                                <MenuItem Header="全选" Click="OnSelectAllClick" />
+                                <Separator />
+                                <MenuItem Header="清空" Command="{Binding ClearImportHtmlCommand}" />
+                            </ContextMenu>
+                        </TextBox.ContextMenu>
+                    </TextBox>
 
                     <StackPanel Orientation="Horizontal" Spacing="8">
                         <Button Content="解析并保存" Command="{Binding ImportFromHtmlCommand}" Height="34"
                                 Padding="14,0" FontSize="13" CornerRadius="8"
                                 Background="#4C6FE8" Foreground="White" />
-                        <Button Content="载入示例" Command="{Binding LoadSampleCommand}" Height="34"
-                                Padding="14,0" FontSize="13" CornerRadius="8"
-                                Background="#EDEFF9" Foreground="#40465C" />
-                        <Button Content="清除数据" Command="{Binding ClearSavedCommand}" Height="34"
+                        <Button Content="清除已保存数据" Command="{Binding ClearSavedCommand}" Height="34"
                                 Padding="14,0" FontSize="13" CornerRadius="8"
                                 Background="#EDEFF9" Foreground="#40465C" />
                     </StackPanel>

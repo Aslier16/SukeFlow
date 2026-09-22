@@ -927,7 +927,7 @@ public class CourseTable : Control
 
     private void DrawEmptyHint(DrawingContext context)
     {
-        var hint = Layout("暂无课程数据", 14, BodyTypeface, CoursePalette.MutedText);
+        var hint = Layout("暂无课程数据，点右上角「导入」添加", 14, BodyTypeface, CoursePalette.MutedText);
         hint.Draw(context, new Point((Bounds.Width - hint.Width) / 2, HeaderHeight + 40));
     }
 
