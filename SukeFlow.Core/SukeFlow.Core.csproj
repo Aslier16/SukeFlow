@@ -1,0 +1,23 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <RootNamespace>SukeFlow.Core</RootNamespace>
+        <AssemblyName>SukeFlow.Core</AssemblyName>
+        <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <!-- 图标等运行时资源；.html/.png 仅作为开发期参考与示例数据，不打包到 Avalonia 资源 -->
+        <AvaloniaResource Include="Assets\**" Exclude="Assets\*.html;Assets\*.png"/>
+        <!-- 示例课表 HTML：解析器的测试/演示数据源 -->
+        <EmbeddedResource Include="Assets\个人课表查询.html" LogicalName="SukeFlow.Core.Assets.SampleTimetable.html"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Avalonia" Version="12.1.2"/>
+        <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.2"/>
+        <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.2"/>
+        <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2"/>
+    </ItemGroup>
+</Project>
