@@ -2,8 +2,10 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="SukeFlow.Core.App"
              xmlns:local="using:SukeFlow.Core"
-             RequestedThemeVariant="Default">
-             <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
+             RequestedThemeVariant="Light">
+             <!-- 参考图是浅色粉彩设计（§7.2），三端统一锁 Light：
+                  Windows 由 MainWindow 限定，Android/WASM 只能由应用级设定；
+                  若为 Default，浏览器/系统暗色模式下会得到黑底 + 粉彩卡片。 -->
 
     <Application.DataTemplates>
         <local:ViewLocator />

@@ -15,7 +15,7 @@
         <vm:MainViewModel />
     </Design.DataContext>
 
-    <Panel>
+    <Panel Background="#E5E7F5">
         <DockPanel>
             <!-- 顶栏：第 X 周 + 日期范围 + 操作 -->
             <Grid DockPanel.Dock="Top" Height="64" Margin="16,10,16,0">
