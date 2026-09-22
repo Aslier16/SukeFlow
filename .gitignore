@@ -28,3 +28,9 @@ TestResults/
 
 # 仅本地使用的参考资源（含第三方截图与真实教师/教室信息，UI 规格已记录在 AGENTS.md §7）
 SukeFlow.Core/Assets/CourseTableRef.png
+/.req_log.py
+/.scrub.py
+/.scan-*.py
+/.kb*.py
+/.pcheck.py
+/.detail_probe.py

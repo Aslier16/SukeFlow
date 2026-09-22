@@ -315,3 +315,8 @@ Android 用 `FilesDir` 显式指定应用私有目录，不依赖 `SpecialFolder
   原文含真实学号与教师工号，备份在仓库外 `~/.sukeflow/个人课表查询.original.html`，禁止提交。
 - `SukeFlow.Core/Assets/CourseTableRef.png` 是含真实教师/教室信息的第三方截图，已加入 `.gitignore`，仅作本地 UI 参考（规格已记录在 §7）。
 - 任何 `*.keystore` / `*.jks` / `*.b64` / `.idea/` / `*.DotSettings.user` 都不入库。
+- **验证线上部署是否为最新版**：`curl -s https://aslier16.github.io/SukeFlow/ | grep -o 'suke-flow-build[^/]*'` 会显示部署时的 commit SHA
+  （`pages.yml` / `release.yml` 在发布前把它注入 `index.html`）。
+- **线上验证必须禁用缓存**：GitHub Pages/CDN 与浏览器会缓存框架资源，普通 `?cb=xxx` 只能绕过 `index.html` 的缓存，
+  `_framework/*`（含内容哈希文件名的程序集）仍会命中旧缓存 → 容易误判为「线上还是旧版」。
+  用 CDP 时先 `Network.setCacheDisabled(true)`（或干脆用全新的 user-data-dir），再截图/断言。
