@@ -261,7 +261,9 @@ jobs:
           set -euo pipefail
           FLAGS=""
           [ "$PRERELEASE" = "true" ] && FLAGS="--prerelease"
-          gh release create "$TAG" dist/* \
+          ls -la dist
+          # 只上传构建产物：dist/ 里还会有 Pages 用的 artifact.tar，不能一并传上去
+          gh release create "$TAG" dist/SukeFlow-*.zip dist/SukeFlow-*.apk \
             --title "SukeFlow $VERSION" \
             --generate-notes \
             $FLAGS
