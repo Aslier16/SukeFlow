@@ -1,0 +1,15 @@
+<Project>
+    <!-- 全仓库共享的打包/版本元数据。CI 通过 -p:Version=... 覆盖（命令行属性优先级最高）。 -->
+    <PropertyGroup>
+        <Version Condition="'$(Version)' == ''">0.1.0</Version>
+        <Product>SukeFlow</Product>
+        <Company>SukeFlow</Company>
+        <Authors>Aslier16</Authors>
+        <Copyright>Copyright (c) 2026 Aslier16</Copyright>
+        <NeutralLanguage>zh-CN</NeutralLanguage>
+        <RepositoryUrl>https://github.com/Aslier16/SukeFlow</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    </PropertyGroup>
+</Project>

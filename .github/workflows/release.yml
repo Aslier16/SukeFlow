@@ -1,0 +1,248 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 v0.1.0 或 0.1.0）；留空则使用触发的 tag'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: 计算版本
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      code: ${{ steps.v.outputs.code }}
+      prerelease: ${{ steps.v.outputs.prerelease }}
+    steps:
+      - id: v
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [ -n "${INPUT_VERSION:-}" ]; then
+            RAW="$INPUT_VERSION"
+          elif [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            RAW="${GITHUB_REF_NAME}"
+          else
+            echo "::error::手动触发时必须填写 version"; exit 1
+          fi
+          V="${RAW#v}"
+          if ! [[ "$V" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$ ]]; then
+            echo "::error::版本号格式应为 x.y.z 或 x.y.z-pre（收到：$RAW）"; exit 1
+          fi
+          BASE="${V%%-*}"
+          IFS=. read -r MA MI PA <<< "$BASE"
+          if (( MA > 99 || MI > 99 || PA > 99 )); then
+            echo "::error::版本号各段需小于 100（Android versionCode 映射为 MA*10000+MI*100+PA）"; exit 1
+          fi
+          {
+            echo "tag=v$V"
+            echo "version=$V"
+            echo "code=$((10#$MA*10000 + 10#$MI*100 + 10#$PA))"
+            if [[ "$V" == *-* ]]; then echo "prerelease=true"; else echo "prerelease=false"; fi
+          } >> "$GITHUB_OUTPUT"
+
+  windows:
+    name: Windows 打包
+    needs: prepare
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Publish (win-x64, self-contained)
+        run: >
+          dotnet publish SukeFlow.Desktop/SukeFlow.Desktop.csproj -c Release -r win-x64
+          --self-contained true -p:PublishReadyToRun=true -p:DebugType=none
+          -p:Version=${{ needs.prepare.outputs.version }} -o build/win --nologo
+
+      - name: Zip
+        shell: pwsh
+        run: |
+          Get-ChildItem -Recurse build/win -Include *.pdb | Remove-Item -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path build/win/* -DestinationPath "SukeFlow-${{ needs.prepare.outputs.version }}-win-x64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-zip
+          path: SukeFlow-*-win-x64.zip
+          if-no-files-found: error
+
+  android:
+    name: Android APK
+    needs: prepare
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-android-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-android-
+
+      - name: Install android workload
+        run: |
+          dotnet workload install android --skip-manifest-update \
+            || sudo -E "$(command -v dotnet)" workload install android --skip-manifest-update
+
+      - name: Restore keystore
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KS_B64:-}" ]; then
+            echo "::error::缺少 ANDROID_KEYSTORE_BASE64，见 docs/release-signing.md"; exit 1
+          fi
+          printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/sukeflow.keystore"
+
+      - name: Publish signed APK
+        env:
+          KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          dotnet publish SukeFlow.Android/SukeFlow.Android.csproj -c Release -f net10.0-android --nologo \
+            -p:Version=${{ needs.prepare.outputs.version }} \
+            -p:ApplicationDisplayVersion=${{ needs.prepare.outputs.version }} \
+            -p:ApplicationVersion=${{ needs.prepare.outputs.code }} \
+            -p:AndroidKeyStore=true \
+            -p:AndroidSigningKeyStore="$RUNNER_TEMP/sukeflow.keystore" \
+            -p:AndroidSigningStorePass="$KS_PASS" \
+            -p:AndroidSigningKeyAlias="$KEY_ALIAS" \
+            -p:AndroidSigningKeyPass="$KEY_PASS" \
+            -p:JavaSdkDirectory="$JAVA_HOME"
+
+      # 防「假成功」：增量构建曾产出未签名的 -Signed.apk，这里强校验
+      - name: Verify signature
+        run: |
+          set -euo pipefail
+          APK="SukeFlow.Android/bin/Release/net10.0-android/com.sukeflow.app-Signed.apk"
+          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
+          APKSIGNER="$(ls "$SDK"/build-tools/*/apksigner | sort -V | tail -1)"
+          "$APKSIGNER" verify --verbose --print-certs "$APK" | tee certs.txt
+          grep -q "Verified using v1 scheme" certs.txt
+          if grep -qi "CN=Android Debug" certs.txt; then
+            echo "::error::APK 仍使用 debug 签名，未使用发布密钥"; exit 1
+          fi
+          cp "$APK" "SukeFlow-${{ needs.prepare.outputs.version }}-android.apk"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: SukeFlow-*-android.apk
+          if-no-files-found: error
+
+  pages:
+    name: WASM → Pages
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-browser-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-browser-
+
+      - name: Install wasm-tools workload
+        run: |
+          dotnet workload install wasm-tools --skip-manifest-update \
+            || sudo -E "$(command -v dotnet)" workload install wasm-tools --skip-manifest-update
+
+      - name: Publish
+        run: >
+          dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish --nologo
+          -p:Version=${{ needs.prepare.outputs.version }}
+
+      - name: Zip (便于自行托管)
+        run: |
+          set -euo pipefail
+          touch publish/wwwroot/.nojekyll
+          (cd publish/wwwroot && zip -qr "../../SukeFlow-${{ needs.prepare.outputs.version }}-wasm.zip" .)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-zip
+          path: SukeFlow-*-wasm.zip
+          if-no-files-found: error
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  release:
+    name: 发布 GitHub Release
+    needs: [prepare, windows, android, pages]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List assets
+        run: ls -la dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          FLAGS=""
+          [ "$PRERELEASE" = "true" ] && FLAGS="--prerelease"
+          gh release create "$TAG" dist/* \
+            --title "SukeFlow $VERSION" \
+            --generate-notes \
+            --target "$GITHUB_SHA" \
+            $FLAGS

@@ -1,0 +1,162 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:SukeFlow.Core.ViewModels"
+             xmlns:models="using:SukeFlow.Core.Models"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:sfc="using:SukeFlow.Core.Controls"
+             mc:Ignorable="d" d:DesignWidth="480" d:DesignHeight="900"
+             x:Class="SukeFlow.Core.Views.MainView"
+             x:DataType="vm:MainViewModel">
+
+    <Design.DataContext>
+        <!-- This only sets the DataContext for the previewer in an IDE,
+             to set the actual DataContext for runtime, set the DataContext property in code (look at App.axaml.cs) -->
+        <vm:MainViewModel />
+    </Design.DataContext>
+
+    <Panel>
+        <DockPanel>
+            <!-- 顶栏：第 X 周 + 日期范围 + 操作 -->
+            <Grid DockPanel.Dock="Top" Height="64" Margin="16,10,16,0">
+                <StackPanel VerticalAlignment="Center" Spacing="3">
+                    <TextBlock Text="{Binding WeekLabel}" FontSize="17" FontWeight="SemiBold" Foreground="#22263A" />
+                    <TextBlock Text="{Binding WeekDateRange}" FontSize="12" Foreground="#8A90A6" />
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"
+                            Spacing="8">
+                    <Button Content="‹" Command="{Binding PreviousWeekCommand}" Width="34" Height="30"
+                            Padding="0" FontSize="16" CornerRadius="8" Background="#EDEFF9" Foreground="#40465C" />
+                    <Button Content="今天" Command="{Binding GoToCurrentWeekCommand}" Height="30" Padding="12,0"
+                            FontSize="13" CornerRadius="8" Background="#EDEFF9" Foreground="#40465C" />
+                    <Button Content="›" Command="{Binding NextWeekCommand}" Width="34" Height="30"
+                            Padding="0" FontSize="16" CornerRadius="8" Background="#EDEFF9" Foreground="#40465C" />
+                    <Button Content="导入" Command="{Binding OpenImportCommand}" Height="30" Padding="12,0"
+                            FontSize="13" CornerRadius="8" Background="#4C6FE8" Foreground="White" />
+                </StackPanel>
+            </Grid>
+
+            <sfc:CourseTable x:Name="Table"
+                             Timetable="{Binding Timetable}"
+                             Semester="{Binding Semester}"
+                             PeriodSchedule="{Binding PeriodSchedule}"
+                             DisplayWeek="{Binding DisplayWeek, Mode=TwoWay}"
+                             CurrentWeek="{Binding CurrentWeek}" />
+        </DockPanel>
+
+        <!-- 课程详情：底部弹出卡片 -->
+        <Panel Name="DetailOverlay" IsHitTestVisible="{Binding IsDetailOpen}"
+               Opacity="{Binding DetailOverlayOpacity}">
+            <Panel.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseOut" />
+                </Transitions>
+            </Panel.Transitions>
+
+            <Border Background="#55000000" PointerPressed="OnScrimPressed" />
+            <Border Name="DetailSheet"
+                    VerticalAlignment="Bottom" Background="White" CornerRadius="18,18,0,0"
+                    Padding="20,16,20,28" BoxShadow="0 -6 24 0 #14000000"
+                    MaxHeight="560">
+                <Border.RenderTransform>
+                    <TranslateTransform Y="{Binding DetailSheetOffset}">
+                        <TranslateTransform.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Y" Duration="0:0:0.28" Easing="CubicEaseOut" />
+                            </Transitions>
+                        </TranslateTransform.Transitions>
+                    </TranslateTransform>
+                </Border.RenderTransform>
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Spacing="12">
+                        <Grid>
+                            <StackPanel Spacing="4" Margin="0,0,40,0">
+                                <TextBlock Text="{Binding DetailTitle}" FontSize="19" FontWeight="SemiBold"
+                                           Foreground="#22263A" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding DetailSubtitle}" FontSize="13" Foreground="#6B7186"
+                                           TextWrapping="Wrap" />
+                            </StackPanel>
+                            <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                    Width="30" Height="30" Padding="0" CornerRadius="8"
+                                    Background="#F0F1F8" Foreground="#6B7186"
+                                    Command="{Binding CloseDetailCommand}" />
+                        </Grid>
+
+                        <ItemsControl ItemsSource="{Binding DetailSessions}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="models:CourseSession">
+                                    <Border Background="#F3F4FB" CornerRadius="10" Padding="12,9" Margin="0,0,0,8">
+                                        <TextBlock Text="{Binding DisplaySummary}" FontSize="13.5"
+                                                   Foreground="#33374D" TextWrapping="Wrap" />
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Text="{Binding DetailMeta}" FontSize="12.5" Foreground="#6B7186"
+                                   TextWrapping="Wrap" LineHeight="20" />
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Panel>
+
+        <!-- 导入课表：底部面板 -->
+        <Panel Name="ImportOverlay" IsHitTestVisible="{Binding IsImportOpen}"
+               Opacity="{Binding ImportOverlayOpacity}">
+            <Panel.Transitions>
+                <Transitions>
+                    <DoubleTransition Property="Opacity" Duration="0:0:0.22" Easing="CubicEaseOut" />
+                </Transitions>
+            </Panel.Transitions>
+
+            <Border Background="#55000000" PointerPressed="OnImportScrimPressed" />
+            <Border Name="ImportSheet" VerticalAlignment="Bottom" Background="White" CornerRadius="18,18,0,0"
+                    Padding="20,16,20,24" BoxShadow="0 -6 24 0 #14000000"
+                    MaxHeight="620">
+                <Border.RenderTransform>
+                    <TranslateTransform Y="{Binding ImportSheetOffset}">
+                        <TranslateTransform.Transitions>
+                            <Transitions>
+                                <DoubleTransition Property="Y" Duration="0:0:0.28" Easing="CubicEaseOut" />
+                            </Transitions>
+                        </TranslateTransform.Transitions>
+                    </TranslateTransform>
+                </Border.RenderTransform>
+                <StackPanel Spacing="10">
+                    <Grid>
+                        <StackPanel Spacing="3">
+                            <TextBlock Text="导入课表" FontSize="17" FontWeight="SemiBold" Foreground="#22263A" />
+                            <TextBlock Text="{Binding DataSourceText}" FontSize="12" Foreground="#8A90A6" />
+                        </StackPanel>
+                        <Button Content="✕" HorizontalAlignment="Right" VerticalAlignment="Top"
+                                Width="30" Height="30" Padding="0" CornerRadius="8"
+                                Background="#F0F1F8" Foreground="#6B7186"
+                                Command="{Binding CloseImportCommand}" />
+                    </Grid>
+
+                    <TextBlock FontSize="12" Foreground="#6B7186" TextWrapping="Wrap" LineHeight="18"
+                               Text="把教务系统「个人课表查询」网页另存为 HTML 后，用文本编辑器打开并全选复制，粘贴到下方；也可以直接粘贴网页源码。其它课程会被忽略。" />
+
+                    <TextBox Text="{Binding ImportHtml}" AcceptsReturn="True" Height="200"
+                             TextWrapping="Wrap" FontSize="12" CornerRadius="10"
+                             Watermark="在此粘贴 HTML 源码…" />
+
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button Content="解析并保存" Command="{Binding ImportFromHtmlCommand}" Height="34"
+                                Padding="14,0" FontSize="13" CornerRadius="8"
+                                Background="#4C6FE8" Foreground="White" />
+                        <Button Content="载入示例" Command="{Binding LoadSampleCommand}" Height="34"
+                                Padding="14,0" FontSize="13" CornerRadius="8"
+                                Background="#EDEFF9" Foreground="#40465C" />
+                        <Button Content="清除数据" Command="{Binding ClearSavedCommand}" Height="34"
+                                Padding="14,0" FontSize="13" CornerRadius="8"
+                                Background="#EDEFF9" Foreground="#40465C" />
+                    </StackPanel>
+
+                    <TextBlock Text="{Binding ImportStatus}" FontSize="12.5" Foreground="#4C6FE8"
+                               TextWrapping="Wrap" LineHeight="18" />
+                </StackPanel>
+            </Border>
+        </Panel>
+    </Panel>
+</UserControl>

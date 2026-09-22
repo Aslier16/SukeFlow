@@ -1,0 +1,110 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  core:
+    name: Core / Desktop / Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Build Core + Desktop
+        run: |
+          dotnet build SukeFlow.Core/SukeFlow.Core.csproj -c Release --nologo
+          dotnet build SukeFlow.Desktop/SukeFlow.Desktop.csproj -c Release --nologo
+
+      - name: Test
+        run: dotnet test SukeFlow.Tests/SukeFlow.Tests.csproj -c Release --nologo --logger "trx;LogFileName=test.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: '**/TestResults/*.trx'
+          if-no-files-found: ignore
+
+  android:
+    name: Android (build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-android-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-android-
+
+      - name: Install android workload
+        run: |
+          dotnet workload install android --skip-manifest-update \
+            || sudo -E "$(command -v dotnet)" workload install android --skip-manifest-update
+
+      - name: Build APK (debug-signed, 仅校验构建)
+        run: >
+          dotnet build SukeFlow.Android/SukeFlow.Android.csproj -c Release -f net10.0-android --nologo
+          -p:JavaSdkDirectory="$JAVA_HOME"
+
+  browser:
+    name: Browser (publish)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-browser-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-browser-
+
+      - name: Install wasm-tools workload
+        run: |
+          dotnet workload install wasm-tools --skip-manifest-update \
+            || sudo -E "$(command -v dotnet)" workload install wasm-tools --skip-manifest-update
+
+      - name: Publish WASM
+        run: dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish --nologo
+
+      - name: Check output
+        run: |
+          test -f publish/wwwroot/index.html
+          test -d publish/wwwroot/_framework
+          du -sh publish/wwwroot

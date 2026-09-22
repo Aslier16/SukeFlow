@@ -3,3 +3,26 @@ obj/
 /packages/
 riderModule.iml
 /_ReSharper.Caches/
+
+# IDE
+.idea/
+*.DotSettings.user
+*.user
+
+# 发布产物
+publish/
+out/
+TestResults/
+
+# 本地使用的探测/扫描脚本产物
+.*-probe.txt
+.*-report.txt
+.scratch/
+
+# 签名密钥：绝不入库（keytool 生成，见 docs/release-signing.md）
+*.keystore
+*.jks
+*.b64
+
+# 仅本地使用的参考资源（含第三方截图与真实教师/教室信息，UI 规格已记录在 AGENTS.md §7）
+SukeFlow.Core/Assets/CourseTableRef.png

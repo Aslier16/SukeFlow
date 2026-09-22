@@ -1,0 +1,71 @@
+name: Pages
+
+on:
+  push:
+    branches: [master]
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - 'LICENSE'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build WASM
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-browser-${{ hashFiles('**/*.csproj', 'Directory.Build.props', 'global.json') }}
+          restore-keys: nuget-${{ runner.os }}-browser-
+
+      - name: Install wasm-tools workload
+        run: |
+          dotnet workload install wasm-tools --skip-manifest-update \
+            || sudo -E "$(command -v dotnet)" workload install wasm-tools --skip-manifest-update
+
+      - name: Publish
+        run: dotnet publish SukeFlow.Browser/SukeFlow.Browser.csproj -c Release -o publish --nologo
+
+      # _framework 以 _ 开头，Jekyll 会忽略（artifact 部署本身不走 Jekyll，这里再兜底）
+      - name: Prepare site
+        run: |
+          touch publish/wwwroot/.nojekyll
+          ls -la publish/wwwroot | head -20
+          du -sh publish/wwwroot
+
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: publish/wwwroot
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
