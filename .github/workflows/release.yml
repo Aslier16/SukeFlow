@@ -205,6 +205,9 @@ jobs:
         run: |
           set -euo pipefail
           touch publish/wwwroot/.nojekyll
+          sed -i "s|</head>|<meta name=\"suke-flow-build\" content=\"${GITHUB_SHA}\" /></head>|" publish/wwwroot/index.html
+          rm -f publish/wwwroot/index.html.br publish/wwwroot/index.html.gz
+          grep -o 'suke-flow-build[^/]*' publish/wwwroot/index.html
           (cd publish/wwwroot && zip -qr "../../SukeFlow-${{ needs.prepare.outputs.version }}-wasm.zip" .)
 
       - uses: actions/upload-artifact@v4

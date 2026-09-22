@@ -47,8 +47,12 @@ jobs:
       # _framework 以 _ 开头，Jekyll 会忽略（artifact 部署本身不走 Jekyll，这里再兜底）
       - name: Prepare site
         run: |
+          set -euo pipefail
           touch publish/wwwroot/.nojekyll
-          ls -la publish/wwwroot | head -20
+          sed -i "s|</head>|<meta name=\"suke-flow-build\" content=\"${GITHUB_SHA}\" /></head>|" publish/wwwroot/index.html
+          # 改过 index.html，删除发布时生成的预压缩副本，避免 CDN 下发旧内容
+          rm -f publish/wwwroot/index.html.br publish/wwwroot/index.html.gz
+          grep -o 'suke-flow-build[^/]*' publish/wwwroot/index.html
           du -sh publish/wwwroot
 
       - uses: actions/configure-pages@v5
