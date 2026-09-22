@@ -151,10 +151,14 @@ jobs:
           set -euo pipefail
           APK="SukeFlow.Android/bin/Release/net10.0-android/com.sukeflow.app-Signed.apk"
           SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$LOCALAPPDATA/Android/Sdk}}"
-          APKSIGNER="$(ls "$SDK"/build-tools/*/apksigner.bat "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
-          echo "apksigner=$APKSIGNER"
+          APKSIGNER=""
+          for candidate in "$SDK"/build-tools/*/apksigner.bat "$SDK"/build-tools/*/apksigner; do
+            [ -f "$candidate" ] && APKSIGNER="$candidate"
+          done
+          echo "apksigner=${APKSIGNER:?未找到 apksigner（$SDK/build-tools）}"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee certs.txt
-          grep -q "Verified using v1 scheme" certs.txt
+          grep -q "Verifies" certs.txt
+          grep -qi "v1 scheme (JAR signing): true" certs.txt   # minSdk 23 需要 v1 签名
           if grep -qi "CN=Android Debug" certs.txt; then
             echo "::error::APK 仍使用 debug 签名，未使用发布密钥"; exit 1
           fi
@@ -170,6 +174,10 @@ jobs:
     name: WASM → Pages
     needs: prepare
     runs-on: ubuntu-latest
+    # 与 pages.yml 共用组名，避免与 master 推送触发的 Pages 部署撞车（GitHub 每个环境同时只允许一个部署）
+    concurrency:
+      group: pages
+      cancel-in-progress: false
     permissions:
       contents: read
       pages: write
@@ -251,5 +259,4 @@ jobs:
           gh release create "$TAG" dist/* \
             --title "SukeFlow $VERSION" \
             --generate-notes \
-            --target "$GITHUB_SHA" \
             $FLAGS

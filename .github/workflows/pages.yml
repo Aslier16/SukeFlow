@@ -15,8 +15,10 @@ permissions:
   id-token: write
 
 concurrency:
+  # 与 release.yml 的 Pages job 共用同一个组：GitHub 同一时间只允许一个 Pages 部署，
+  # 两个工作流并发部署会直接被判失败（表现为 job 未分配 runner 就 failure）。
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
