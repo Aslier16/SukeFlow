@@ -17,6 +17,8 @@ TestResults/
 # 本地使用的探测/扫描脚本产物
 .*-probe.txt
 .*-report.txt
+.pages_*.py
+.pages-*.png
 .scratch/
 
 # 签名密钥：绝不入库（keytool 生成，见 docs/release-signing.md）
