@@ -188,7 +188,10 @@ public class ZfsoftTimetableParserTests
         var timetable = Parser.Parse(html);
 
         Assert.Equal(2, timetable.Courses.Count);
-        Assert.Equal(["甲老师", "乙老师"], timetable.Courses.Select(c => c.Teacher).OrderBy(t => t).ToArray());
+        // 不断言顺序：汉字排序依赖区域设置（Windows NVC 与 Linux ICU 不同）
+        var teachers = timetable.Courses.Select(c => c.Teacher!).ToArray();
+        Assert.Contains("甲老师", teachers);
+        Assert.Contains("乙老师", teachers);
     }
 
     /// <summary>空 HTML / 非课表页面不抛异常，返回空表。</summary>

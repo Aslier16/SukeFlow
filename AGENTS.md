@@ -51,7 +51,7 @@ SukeFlow/
 ├── SukeFlow.Tests/              # xunit 单测（解析器/周次/模型/序列化），CI 门禁
 ├── .github/workflows/           # ci.yml / pages.yml / release.yml
 ├── docs/release-signing.md      # Android 签名密钥操作手册
-├── global.json                  # 固定 SDK 10.0.2xx（rollForward: latestFeature）
+├── global.json                  # 固定 SDK 10.0.202（rollForward: latestPatch，与已验证的本地工具链一致）
 ├── Directory.Build.props        # 共享版本/作者/仓库元数据
 ├── LICENSE / README.md
 ```
@@ -285,11 +285,15 @@ Android 用 `FilesDir` 显式指定应用私有目录，不依赖 `SpecialFolder
 
 | 文件 | 触发 | 内容 |
 | --- | --- | --- |
-| `.github/workflows/ci.yml` | push/PR 到 `master`、手动 | Core+Desktop 构建 + `SukeFlow.Tests`（50 用例）+ Android Release 构建 + WASM publish 校验 |
+| `.github/workflows/ci.yml` | push/PR 到 `master`、手动 | Core+Desktop 构建 + `SukeFlow.Tests`（50 用例）+ Android Release 构建（windows-latest）+ WASM publish 校验 |
 | `.github/workflows/pages.yml` | push 到 `master`、手动 | WASM → GitHub Pages（artifact 部署，不走 Jekyll） |
 | `.github/workflows/release.yml` | tag `v*`、手动（需填 version） | Windows zip + 签名 APK + WASM zip → GitHub Release，并同步部署 Pages |
 
 站点地址：<https://aslier16.github.io/SukeFlow/>（`index.html` 全部用相对路径，因此兼容子路径部署；**不要**加 `href="/"` 的 `<base>`）。
+
+> 两个踩过的坑（改动前先读）：
+> 1. **Android 构建必须跑在 Windows/macOS 宿主**：.NET 10 的 Android AOT 会引用宿主机 Mono 运行时包，而 `Microsoft.NETCore.App.Runtime.Mono.linux-x64` 没有 10.x 版本 → Linux 上 restore 直接 `NU1102`。
+> 2. **SDK 不能随意放宽到更高 feature band**：`global.json` 锁 `10.0.202` + `latestPatch`；用 `latestFeature` 会被 runner 上更新的 SDK（如 10.0.4xx）接管，带来不同的 workload/AOT 包组合。
 
 ### 12.2 版本号
 

@@ -53,7 +53,8 @@ jobs:
 
   android:
     name: Android (build)
-    runs-on: ubuntu-latest
+    # Windows 宿主：.NET 10 的 Android AOT 需要宿主机 Mono 运行时包，linux-x64 的包不存在（NU1102）
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -69,14 +70,12 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-android-
 
       - name: Install android workload
-        run: |
-          dotnet workload install android --skip-manifest-update \
-            || sudo -E "$(command -v dotnet)" workload install android --skip-manifest-update
+        run: dotnet workload install android --skip-manifest-update
 
       - name: Build APK (debug-signed, 仅校验构建)
         run: >
           dotnet build SukeFlow.Android/SukeFlow.Android.csproj -c Release -f net10.0-android --nologo
-          -p:JavaSdkDirectory="$JAVA_HOME"
+          -p:JavaSdkDirectory="$env:JAVA_HOME"
 
   browser:
     name: Browser (publish)

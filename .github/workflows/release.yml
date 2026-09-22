@@ -94,7 +94,8 @@ jobs:
   android:
     name: Android APK
     needs: prepare
-    runs-on: ubuntu-latest
+    # Windows 宿主：.NET 10 的 Android AOT 需要宿主机 Mono 运行时包，linux-x64 的包不存在（NU1102）
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -110,11 +111,10 @@ jobs:
           restore-keys: nuget-${{ runner.os }}-android-
 
       - name: Install android workload
-        run: |
-          dotnet workload install android --skip-manifest-update \
-            || sudo -E "$(command -v dotnet)" workload install android --skip-manifest-update
+        run: dotnet workload install android --skip-manifest-update
 
       - name: Restore keystore
+        shell: bash
         env:
           KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
@@ -123,8 +123,10 @@ jobs:
             echo "::error::缺少 ANDROID_KEYSTORE_BASE64，见 docs/release-signing.md"; exit 1
           fi
           printf '%s' "$KS_B64" | base64 -d > "$RUNNER_TEMP/sukeflow.keystore"
+          ls -l "$RUNNER_TEMP/sukeflow.keystore"
 
       - name: Publish signed APK
+        shell: bash
         env:
           KS_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -140,15 +142,17 @@ jobs:
             -p:AndroidSigningStorePass="$KS_PASS" \
             -p:AndroidSigningKeyAlias="$KEY_ALIAS" \
             -p:AndroidSigningKeyPass="$KEY_PASS" \
-            -p:JavaSdkDirectory="$JAVA_HOME"
+            -p:JavaSdkDirectory="${JAVA_HOME:?JAVA_HOME 未设置}"
 
       # 防「假成功」：增量构建曾产出未签名的 -Signed.apk，这里强校验
       - name: Verify signature
+        shell: bash
         run: |
           set -euo pipefail
           APK="SukeFlow.Android/bin/Release/net10.0-android/com.sukeflow.app-Signed.apk"
-          SDK="${ANDROID_SDK_ROOT:-$ANDROID_HOME}"
-          APKSIGNER="$(ls "$SDK"/build-tools/*/apksigner | sort -V | tail -1)"
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-$LOCALAPPDATA/Android/Sdk}}"
+          APKSIGNER="$(ls "$SDK"/build-tools/*/apksigner.bat "$SDK"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1)"
+          echo "apksigner=$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs "$APK" | tee certs.txt
           grep -q "Verified using v1 scheme" certs.txt
           if grep -qi "CN=Android Debug" certs.txt; then
