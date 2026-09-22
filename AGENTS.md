@@ -320,3 +320,19 @@ Android 用 `FilesDir` 显式指定应用私有目录，不依赖 `SpecialFolder
 - **线上验证必须禁用缓存**：GitHub Pages/CDN 与浏览器会缓存框架资源，普通 `?cb=xxx` 只能绕过 `index.html` 的缓存，
   `_framework/*`（含内容哈希文件名的程序集）仍会命中旧缓存 → 容易误判为「线上还是旧版」。
   用 CDP 时先 `Network.setCacheDisabled(true)`（或干脆用全新的 user-data-dir），再截图/断言。
+
+### 12.5 流水线坑位清单（改动前必读）
+
+- **`github-pages` 环境策略**：默认只允许「默认分支」部署，tag 触发的部署会被直接拒（job 未分配 runner 即失败，
+  注解为 `Tag "vX" is not allowed to deploy to github-pages due to environment protection rules`）。
+  已配置为自定义规则：`master`（branch）+ `v*`（tag）。新增发布分支/tag 规则时记得同步这里。
+- **一个 Pages 部署锁**：同一时间只允许一个 Pages 部署。`release.yml` 的 `pages` job 与 `pages.yml` 共用
+  `concurrency.group: pages`（`cancel-in-progress: false`），否则并发部署会瞬间失败。
+- **`gh release create --generate-notes` 需要 git 仓库上下文**：release job 必须 `actions/checkout`（`fetch-depth: 0`），
+  只有 `download-artifact` 会报 `fatal: not a git repository`。
+- **上传资产要显式写模式**：用 `dist/SukeFlow-*.zip dist/SukeFlow-*.apk`；用 `dist/*` 会把 `download-artifact`
+  顺带取回的 Pages `artifact.tar` 一起传上 Release。
+- **重跑旧 run 不会使用新 workflow**：「Re-run failed jobs」沿用该 run 创建时的 workflow 与提交。
+  改了 workflow 后要么把 tag 移到新提交，要么用 `workflow_dispatch` 触发。
+- **验证线上版本**：`curl -s https://aslier16.github.io/SukeFlow/ | grep -o 'suke-flow-build[^/]*'`；
+  渲染验证必须禁用缓存（见 §11），否则容易误判为「线上还是旧版」。
